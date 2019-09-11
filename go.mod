@@ -1,4 +1,4 @@
-module github.com/carlmjohnson/go-cli
+module github.com/spotlightpa/inky-fetch
 
 go 1.13
 

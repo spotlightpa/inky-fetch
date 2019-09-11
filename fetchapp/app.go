@@ -1,4 +1,4 @@
-package app
+package fetchapp
 
 import (
 	"flag"
@@ -17,17 +17,17 @@ func CLI(args []string) error {
 	fl.Var(src, "src", "source file or URL")
 	verbose := fl.Bool("verbose", false, "log debug output")
 	fl.Usage = func() {
-		fmt.Fprintf(fl.Output(), `go-cli - a Go CLI application template cat clone
+		fmt.Fprintf(fl.Output(), `inky-fetch - Fetches Spotlight PA stories from the Philadelphia Inquirer
 
 Usage:
 
-	go-cli [options]
+	inky-fetch [options]
 
 Options:
 `)
 		fl.PrintDefaults()
 	}
-	if err := ff.Parse(fl, args, ff.WithEnvVarPrefix("GO_CLI")); err != nil {
+	if err := ff.Parse(fl, args, ff.WithEnvVarPrefix("INKY_FETCH")); err != nil {
 		return err
 	}
 
@@ -37,7 +37,7 @@ Options:
 func appExec(src io.ReadCloser, verbose bool) error {
 	l := nooplogger
 	if verbose {
-		l = log.New(os.Stderr, "go-cli", log.LstdFlags).Printf
+		l = log.New(os.Stderr, "inky-fetch", log.LstdFlags).Printf
 	}
 	a := app{src, l}
 	if err := a.exec(); err != nil {

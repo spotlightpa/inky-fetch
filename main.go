@@ -4,9 +4,9 @@ import (
 	"os"
 
 	"github.com/carlmjohnson/exitcode"
-	"github.com/carlmjohnson/go-cli/app"
+	"github.com/spotlightpa/inky-fetch/fetchapp"
 )
 
 func main() {
-	exitcode.Exit(app.CLI(os.Args[1:]))
+	exitcode.Exit(fetchapp.CLI(os.Args[1:]))
 }
