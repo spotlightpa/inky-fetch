@@ -1,4 +1,4 @@
-package fetchapp
+package feed
 
 import (
 	"fmt"

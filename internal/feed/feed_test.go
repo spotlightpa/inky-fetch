@@ -1,11 +1,11 @@
-package fetchapp_test
+package feed_test
 
 import (
 	"io/ioutil"
 	"strings"
 	"testing"
 
-	"github.com/spotlightpa/inky-fetch/fetchapp"
+	"github.com/spotlightpa/inky-fetch/internal/feed"
 )
 
 func assertErr(t *testing.T, msg string, err error) {
@@ -39,7 +39,7 @@ func TestGetSpotlightLinks(t *testing.T) {
 		src   string
 		links string
 	}{
-		"case": {
+		"nursing": {
 			src:   "arc.xml",
 			links: "https://www.inquirer.com/news/pennsylvania/spl/nurse-licensing-board-pennsylvania-delays-complaints-20190911.html",
 		},
@@ -48,7 +48,7 @@ func TestGetSpotlightLinks(t *testing.T) {
 	for name, test := range testcases {
 		t.Run(name, func(t *testing.T) {
 			data := readFile(t, test.src)
-			u, err := fetchapp.GetSpotlightLinks(strings.NewReader(data))
+			u, err := feed.GetSpotlightLinks(strings.NewReader(data))
 			assertErr(t, "could not process RSS", err)
 			for i, s := range strings.Split(test.links, ",") {
 				assertStrings(t, u[i].String(), s)
