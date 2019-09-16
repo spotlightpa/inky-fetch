@@ -10,6 +10,7 @@ import (
 
 	"github.com/carlmjohnson/flagext"
 	"github.com/peterbourgon/ff"
+	"github.com/spotlightpa/inky-fetch/internal/cachedata"
 	"github.com/spotlightpa/inky-fetch/internal/feed"
 	"github.com/spotlightpa/inky-fetch/internal/slack"
 )
@@ -18,6 +19,8 @@ func CLI(args []string) error {
 	fl := flag.NewFlagSet("app", flag.ContinueOnError)
 	feed := flagext.FileOrURL("https://www.inquirer.com/arcio/rss/", nil)
 	fl.Var(feed, "feed", "source file or URL")
+	cacheloc := cachedata.Default("inky-feed")
+	fl.Var(&cacheloc, "cache-location", "file `path` to save seen URLs")
 	verbose := fl.Bool("verbose", false, "log debug output")
 	slackURL := fl.String("slack-web-hook", "", "web hook to post Slack messages")
 	fl.Usage = func() {
@@ -34,22 +37,21 @@ Options:
 	if err := ff.Parse(fl, args, ff.WithEnvVarPrefix("INKY_FETCH")); err != nil {
 		return err
 	}
-	if *slackURL == "" {
-		fmt.Fprintf(fl.Output(), "Slack Web Hook not set\n\n")
-		fl.Usage()
-		return flag.ErrHelp
-	}
 
-	return appExec(feed, *slackURL, *verbose)
+	return appExec(feed, *slackURL, *verbose, cacheloc)
 }
 
-func appExec(feed io.ReadCloser, slackURL string, verbose bool) error {
+func appExec(feed io.ReadCloser, slackURL string, verbose bool, loc cachedata.Loc) error {
 	l := nooplogger
 	if verbose {
-		l = log.New(os.Stderr, "inky-fetch", log.LstdFlags).Printf
+		l = log.New(os.Stderr, "inky-fetch ", log.LstdFlags).Printf
 	}
-	sc := slack.New(slackURL, l, nil)
-	a := app{feed, sc, l}
+
+	var sc *slack.Client
+	if slackURL != "" {
+		sc = slack.New(slackURL, l, nil)
+	}
+	a := app{feed, sc, l, loc}
 	if err := a.exec(); err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
 		return err
@@ -65,6 +67,7 @@ type app struct {
 	feed io.ReadCloser
 	sc   *slack.Client
 	log  logger
+	loc  cachedata.Loc
 }
 
 func (a *app) exec() (err error) {
@@ -76,12 +79,55 @@ func (a *app) exec() (err error) {
 		return err
 	}
 
+	urls, err = a.dedupe(urls)
+	if err != nil {
+		return err
+	}
+
 	a.log("no error fetching %d urls", len(urls))
-	if len(urls) > 0 {
-		a.sc.Post(a.messageFrom(urls))
+	if a.sc != nil {
+		err = a.postToSlack(urls)
+	} else {
+		a.logToTerm(urls)
 	}
 
 	return err
+}
+
+func (a *app) dedupe(urls []*url.URL) ([]*url.URL, error) {
+	a.log("deduping %d urls", len(urls))
+
+	var seen map[string]bool
+	err := a.loc.Read(&seen)
+	if err != nil {
+		return nil, err
+	}
+	if seen == nil {
+		seen = make(map[string]bool)
+	}
+
+	filteredURLs := urls[:0]
+	for _, u := range urls {
+		if !seen[u.String()] {
+			filteredURLs = append(filteredURLs, u)
+			seen[u.String()] = true
+		}
+	}
+
+	if err = a.loc.Write(&seen); err != nil {
+		return nil, err
+	}
+
+	a.log("found %d new urls", len(filteredURLs))
+	return filteredURLs, nil
+}
+
+func (a *app) postToSlack(urls []*url.URL) (err error) {
+	a.log("posting to slack")
+	if len(urls) > 0 {
+		err = a.sc.Post(a.messageFrom(urls))
+	}
+	return
 }
 
 func (a *app) messageFrom(urls []*url.URL) slack.Message {
@@ -98,5 +144,12 @@ func (a *app) messageFrom(urls []*url.URL) slack.Message {
 	return slack.Message{
 		Text:        "Found Spotlight Inquirer Page",
 		Attachments: attachments,
+	}
+}
+
+func (a *app) logToTerm(urls []*url.URL) {
+	fmt.Printf("found %d url(s):\n", len(urls))
+	for _, u := range urls {
+		fmt.Printf("- %v\n", u)
 	}
 }
