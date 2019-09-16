@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/carlmjohnson/flagext"
 	"github.com/peterbourgon/ff"
@@ -23,6 +24,7 @@ func CLI(args []string) error {
 	fl.Var(&cacheloc, "cache-location", "file `path` to save seen URLs")
 	verbose := fl.Bool("verbose", false, "log debug output")
 	slackURL := fl.String("slack-web-hook", "", "web hook to post Slack messages")
+	interval := fl.Duration("interval", 0, "poll interval (if 0, only runs once)")
 	fl.Usage = func() {
 		fmt.Fprintf(fl.Output(), `inky-fetch - Fetches Spotlight PA stories from the Philadelphia Inquirer
 
@@ -38,10 +40,10 @@ Options:
 		return err
 	}
 
-	return appExec(feed, *slackURL, *verbose, cacheloc)
+	return appExec(feed, *slackURL, *verbose, cacheloc, *interval)
 }
 
-func appExec(feed io.ReadCloser, slackURL string, verbose bool, loc cachedata.Loc) error {
+func appExec(feed io.ReadCloser, slackURL string, verbose bool, loc cachedata.Loc, interval time.Duration) error {
 	l := nooplogger
 	if verbose {
 		l = log.New(os.Stderr, "inky-fetch ", log.LstdFlags).Printf
@@ -52,9 +54,13 @@ func appExec(feed io.ReadCloser, slackURL string, verbose bool, loc cachedata.Lo
 		sc = slack.New(slackURL, l, nil)
 	}
 	a := app{feed, sc, l, loc}
-	if err := a.exec(); err != nil {
-		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
-		return err
+	if interval == 0 {
+		if err := a.exec(); err != nil {
+			fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
+			return err
+		}
+	} else {
+		a.loop(interval)
 	}
 	return nil
 }
@@ -151,5 +157,15 @@ func (a *app) logToTerm(urls []*url.URL) {
 	fmt.Printf("found %d url(s):\n", len(urls))
 	for _, u := range urls {
 		fmt.Printf("- %v\n", u)
+	}
+}
+
+func (a *app) loop(interval time.Duration) {
+	for {
+		wait := time.After(interval)
+		if err := a.exec(); err != nil {
+			fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
+		}
+		<-wait
 	}
 }
