@@ -22,7 +22,7 @@ func CLI(args []string) error {
 	fl.Var(feed, "feed", "source file or URL")
 	cacheloc := cachedata.Default("inky-feed")
 	fl.Var(&cacheloc, "cache-location", "file `path` to save seen URLs")
-	verbose := fl.Bool("verbose", false, "log debug output")
+	verbose := fl.Bool("verbose", true, "log debug output")
 	slackURL := fl.String("slack-web-hook", "", "web hook to post Slack messages")
 	interval := fl.Duration("interval", 0, "poll interval (if 0, only runs once)")
 	fl.Usage = func() {
