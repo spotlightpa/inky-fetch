@@ -3,7 +3,6 @@ package fetchapp
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/url"
 	"os"
@@ -18,8 +17,7 @@ import (
 
 func CLI(args []string) error {
 	fl := flag.NewFlagSet("app", flag.ContinueOnError)
-	feed := flagext.FileOrURL("https://www.inquirer.com/arcio/rss/", nil)
-	fl.Var(feed, "feed", "source file or URL")
+	feed := fl.String("feed", "https://www.inquirer.com/arcio/rss/", "source file or URL")
 	cacheloc := cachedata.Default("inky-feed")
 	fl.Var(&cacheloc, "cache-location", "file `path` to save seen URLs")
 	verbose := fl.Bool("verbose", true, "log debug output")
@@ -40,10 +38,10 @@ Options:
 		return err
 	}
 
-	return appExec(feed, *slackURL, *verbose, cacheloc, *interval)
+	return appExec(*feed, *slackURL, *verbose, cacheloc, *interval)
 }
 
-func appExec(feed io.ReadCloser, slackURL string, verbose bool, loc cachedata.Loc, interval time.Duration) error {
+func appExec(feed string, slackURL string, verbose bool, loc cachedata.Loc, interval time.Duration) error {
 	l := nooplogger
 	if verbose {
 		l = log.New(os.Stderr, "inky-fetch ", log.LstdFlags).Printf
@@ -70,17 +68,19 @@ type logger = func(format string, v ...interface{})
 func nooplogger(format string, v ...interface{}) {}
 
 type app struct {
-	feed io.ReadCloser
-	sc   *slack.Client
-	log  logger
-	loc  cachedata.Loc
+	feedloc string
+	sc      *slack.Client
+	log     logger
+	loc     cachedata.Loc
 }
 
 func (a *app) exec() (err error) {
 	a.log("starting")
 	defer func() { a.log("done") }()
 
-	urls, err := feed.GetSpotlightLinks(a.feed)
+	feedrc := flagext.FileOrURL(a.feedloc, nil)
+	urls, err := feed.GetSpotlightLinks(feedrc)
+	feedrc.Close()
 	if err != nil {
 		return err
 	}
